@@ -188,9 +188,73 @@
         </section>
         <template v-if="tickers.length > 0">
           <hr class="w-full border-t border-gray-600 my-4" />
+          <div>
+            <button
+              v-if="page > 1"
+              @click="page -= 1"
+              class="
+                my-4
+                mx-2
+                inline-flex
+                items-center
+                py-2
+                px-4
+                border border-transparent
+                shadow-sm
+                text-sm
+                leading-4
+                font-medium
+                rounded-full
+                text-white
+                bg-gray-600
+                hover:bg-gray-700
+                transition-colors
+                duration-300
+                focus:outline-none
+                focus:ring-2
+                focus:ring-offset-2
+                focus:ring-gray-500
+              "
+            >
+              Назад</button
+            ><button
+              v-if="hasNextPage"
+              @click="page += 1"
+              class="
+                my-4
+                mx-2
+                inline-flex
+                items-center
+                py-2
+                px-4
+                border border-transparent
+                shadow-sm
+                text-sm
+                leading-4
+                font-medium
+                rounded-full
+                text-white
+                bg-gray-600
+                hover:bg-gray-700
+                transition-colors
+                duration-300
+                focus:outline-none
+                focus:ring-2
+                focus:ring-offset-2
+                focus:ring-gray-500
+              "
+            >
+              Вперед
+            </button>
+            <div>
+              Фильтр:
+              <input type="text" v-model="filter" />
+            </div>
+          </div>
+          <hr class="w-full border-t border-gray-600 my-4" />
           <dl class="mt-5 grid grid-cols-1 gap-5 sm:grid-cols-3">
             <div
-              v-for="(t, index) in tickers"
+              v-for="(t, index) in filteredTickers()"
               :key="index"
               @click="select(t)"
               :class="{ 'border-4': sel === t }"
@@ -302,7 +366,10 @@ export default {
       tickers: [],
       sel: null,
       graph: [],
-      coinlist: []
+      coinlist: [],
+      page: 1,
+      filter: "",
+      hasNextPage: true
     };
   },
   async created() {
@@ -313,15 +380,57 @@ export default {
     const data = await coins.json();
     this.coinlist = data.Data;
 
-    const TikersData = localStorage.getItem("cryptonomicon-list");
-    if (TikersData) {
-      this.tickers = JSON.parse(TikersData);
-      this.tickers.forEach((tiker) => {
-        this.subscribeToUpdates(tiker.name);
+    const windowData = Object.fromEntries(
+      new URL(window.location).searchParams.entries()
+    );
+
+    if (windowData.filter) {
+      this.filter = windowData.filter;
+    }
+
+    if (windowData.page) {
+      this.page = windowData.page;
+    }
+
+    const TickersData = localStorage.getItem("cryptonomicon-list");
+    if (TickersData) {
+      this.tickers = JSON.parse(TickersData);
+      this.tickers.forEach((tiсker) => {
+        this.subscribeToUpdates(tiсker.name);
       });
     }
   },
+  watch: {
+    filter() {
+      this.page = 1;
+
+      window.history.pushState(
+        null,
+        "test",
+        `${window.location.pathname}?filter=${this.filter}&page=${this.page}`
+      );
+    },
+    page() {
+      window.history.pushState(
+        null,
+        "test",
+        `${window.location.pathname}?filter=${this.filter}&page=${this.page}`
+      );
+    }
+  },
   methods: {
+    filteredTickers() {
+      const start = (this.page - 1) * 6;
+      const end = this.page * 6;
+
+      const filteredTickers = this.tickers.filter((tiсker) =>
+        tiсker.name.includes(this.filter)
+      );
+
+      this.hasNextPage = filteredTickers.length > end;
+
+      return filteredTickers.slice(start, end);
+    },
     add() {
       const currentTicker = {
         name: this.ticker,
@@ -329,6 +438,7 @@ export default {
       };
 
       this.tickers.push(currentTicker);
+      this.filter = "";
 
       localStorage.setItem("cryptonomicon-list", JSON.stringify(this.tickers));
 
@@ -337,17 +447,17 @@ export default {
       this.ticker = "";
     },
 
-    subscribeToUpdates(tikerName) {
+    subscribeToUpdates(tickerName) {
       setInterval(async () => {
         const f = await fetch(
-          `https://min-api.cryptocompare.com/data/price?fsym=${tikerName}&tsyms=USD&api_key=fc06da7bf3c0bbb8a69ce9545f43746b51094760fdeefe4a2dfcd0fa131eabb1`
+          `https://min-api.cryptocompare.com/data/price?fsym=${tickerName}&tsyms=USD&api_key=fc06da7bf3c0bbb8a69ce9545f43746b51094760fdeefe4a2dfcd0fa131eabb1`
         );
         const data = await f.json();
 
-        this.tickers.find((e) => e.name === tikerName).price =
+        this.tickers.find((e) => e.name === tickerName).price =
           data.USD > 1 ? data.USD.toFixed(2) : data.USD.toPrecision(2);
 
-        if (this.sel?.name === tikerName) {
+        if (this.sel?.name === tickerName) {
           this.graph.push(data.USD);
         }
       }, 5000);
@@ -357,8 +467,8 @@ export default {
       this.graph = [];
     },
 
-    handleDelete(tikerToRemove) {
-      this.tickers = this.tickers.filter((e) => e !== tikerToRemove);
+    handleDelete(tickerToRemove) {
+      this.tickers = this.tickers.filter((e) => e !== tickerToRemove);
     },
     normalizeGeaph() {
       const maxValue = Math.max(...this.graph);
